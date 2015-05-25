@@ -35,9 +35,25 @@ class TMMINDEX:
                 return None
 
     def getMMInfo(self, page):
+
+        tmmSoup = BeautifulSoup(page)
+        #find every mm's home page and infopage
+        print tmmSoup.find_all('div', class_='list-item').find_all('a')
+        """    
+        for eachdiv in tmmSoup.body.children:
+            if eachdiv!=' ' and eachdiv!='\n' and eachdiv.name!='input':
+                tempList = []
+                for eacha in eachdiv.descendants:
+                    if eacha.name=='a':
+                        tempList.append(str(eacha))
+                tmmInfo_L.append(tmm.getMMInfo(tempList[0]+tempList[1])[0])
+
+
+
         pattern = re.compile('<a class=.*?href="(.*?)".*?target.*?<a class=.*?href="(.*?)".*?target="_blank">(.*?)</a>', re.S)
         items = re.findall(pattern, page)
         tmmInfo_L = []
         for eachone in items:
             tmmInfo_L.append({'userID':eachone[0].split('/')[-1].split('.')[0], 'mmName':eachone[2], 'homeURL':eachone[0], 'mmInfo':eachone[1]})       
         return tmmInfo_L
+        """

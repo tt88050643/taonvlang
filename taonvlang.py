@@ -45,7 +45,10 @@ class TAONVLANG:
             if len(items)>1:
                 print u'在items找到多个图片链接'
             elif len(items)==1:
-                picList_temp.append(items[0])
+                if items[0].split('.')[-1]=='jpg':
+                    picList_temp.append(items[0])
+                else:
+                    pass
         return picList_temp
         #for eachone in soup.find_all('img'):
          #   print eachone
@@ -73,11 +76,14 @@ class TAONVLANG:
 if __name__ == '__main__':
     tmmInfo_L = []
     #try:
-    for i in range(1,2):
+    for i in range(7,20):
         tmm = FindToHomePage.TMMINDEX('http://mm.taobao.com/json/request_top_list.htm?type=0&page=' + str(i))
         tmmPage = tmm.getpage('utf-8')
+        tmmInfo_L = tmm.getMMInfo(tmmPage)
+        """
         tmmSoup = BeautifulSoup(tmmPage)
         #find every mm's home page and infopage
+
         for eachdiv in tmmSoup.body.children:
             if eachdiv!=' ' and eachdiv!='\n' and eachdiv.name!='input':
                 tempList = []
@@ -85,6 +91,8 @@ if __name__ == '__main__':
                     if eacha.name=='a':
                         tempList.append(str(eacha))
                 tmmInfo_L.append(tmm.getMMInfo(tempList[0]+tempList[1])[0])
+
+
         time.sleep(1)
     for eachone in tmmInfo_L:
         taonvlang = TAONVLANG(str(eachone['homeURL']))
@@ -106,4 +114,4 @@ if __name__ == '__main__':
         #print 'This is ERROR!'
 
             
-        
+        """
