@@ -2,13 +2,12 @@
 #!/usr/bin/env python
 import urllib2
 import urllib
-import re
-import os
+import re, os, commands
 import simplejson as json
 import chardet
 import time
-import FindToHomePage
-
+import FindToHomePage, mycookie
+from bs4 import BeautifulSoup
 class TAONVLANG:
 
     def __init__(self, baseurl):
@@ -16,13 +15,7 @@ class TAONVLANG:
 
     def getpage(self, encodeInfo):
         try:
-            #url = self.baseurl + str(self.userID)
-            #print url
-            headers = {
-            'User-Agent' : 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:37.0) Gecko/20100101 Firefox/37.0',  
-            'Referer' : 'http://www.taobao.com/',
-            'Cookie' : 'cna=qVetDR7bXmkCAXtz2MiGKwJ2; thw=cn; miid=6047895603556384903; v=0; _tb_token_=7eee9bd88e43e; CNZZDATA30064595=cnzz_eid%3D1706728516-1432203658-%26ntime%3D1432219901; CNZZDATA30063598=cnzz_eid%3D132888848-1432202918-http%253A%252F%252Ftool.chinaz.com%252F%26ntime%3D1432218234; CNZZDATA30064598=cnzz_eid%3D794984706-1432200478-http%253A%252F%252Fmm.taobao.com%252F%26ntime%3D1432223045; CNZZDATA30063600=cnzz_eid%3D280477778-1432200739-http%253A%252F%252Fmm.taobao.com%252F%26ntime%3D1432222380; JSESSIONID=270E66A7650C3B41AD28CE03BAE36963; uc3=nk2=F4ItT%2BRNzT1W6A%3D%3D&id2=VWhZ6XpmGeVT&vt3=F8dAT%2BLPk%2BjrRKhOrrM%3D&lg2=URm48syIIVrSKA%3D%3D; existShop=MTQzMjIzMDE3NA%3D%3D; unt=tt88050643%26center; lgc=tt88050643; tracknick=tt88050643; sg=32e; cookie2=1c5cfb883f430ac23108502dab84d56a; mt=np=&ci=5_1&cyk=0_0; cookie1=B0as0VkCphZkhxs8xnE%2FUyLcJKEFAHoZTL2vsqgxCaE%3D; unb=672903372; t=1509c05a655237fba2de70dd36002959; _cc_=VT5L2FSpdA%3D%3D; tg=0; _l_g_=Ug%3D%3D; _nk_=tt88050643; cookie17=VWhZ6XpmGeVT; uc1=lltime=1432202205&cookie14=UoW0EP9b%2BEzpkQ%3D%3D&existShop=false&cookie16=WqG3DMC9UpAPBHGz5QBErFxlCA%3D%3D&cookie21=VFC%2FuZ9ainBZ&tag=3&cookie15=V32FPkk%2Fw0dUvg%3D%3D&pas=0; isg=0B5590964A219D0562BAADCEC71F6296; l=ARDArk6AEPAQ8EWuCcwXnhDwGP8Q6xDw',
-            }
+            headers = mycookie.headers
             requset = urllib2.Request(self.baseurl, headers=headers)
             response = urllib2.urlopen(requset)
             if encodeInfo == 'gb2312':
@@ -40,17 +33,29 @@ class TAONVLANG:
         items = re.findall(pattern, page)
         return items
 
+#<img height="559" src="http://img01.taobaocdn.com/imgextra/i1/10490029241756805/T1zm_SFhFXXXXXXXXX_!!631300490-0-tstar.jpg" style="margin: 10.0px;width: 630.0px;height: 559.0px;float: none;" width="630"/>
+
+    def getPic_BS(self, page):
+        picList_temp = []
+        soup = BeautifulSoup(page) 
+        pattern = re.compile('<img.*?src="(.*?)"', re.S)
+
+        for eachone in soup.find_all('div', class_='mm-aixiu-content')[0].find_all('img'):
+            items = re.findall(pattern, str(eachone))
+            if len(items)>1:
+                print u'在items找到多个图片链接'
+            elif len(items)==1:
+                picList_temp.append(items[0])
+        return picList_temp
+        #for eachone in soup.find_all('img'):
+         #   print eachone
+
     def saveImg(self, imgURL, fileName):
         u = urllib.urlopen(imgURL)
         data = u.read()
         f = open(fileName, 'wb')
         f.write(data)
-        f.close()
-
-    def getModelName(self, page):
-        pattern = re.compile('<li class="mm-p-noborder">.*?<dd><a href.*? target="_blank">(.*?)</a></dd>', re.S)
-        modelName = '.'.join(re.findall(pattern, page))
-        return modelName        
+        f.close()     
 
     def mkDir(self, dirName):
         isExists = os.path.exists(dirName)
@@ -58,41 +63,47 @@ class TAONVLANG:
             os.makedirs(dirName)
             return dirName
         else:
-            return False
-
-    def getModelInfo(self, page):
-        modelInfo_Dict = json.JSONDecoder().decode(page)
-        modelInfo_List = modelInfo_Dict['data']['searchDOList']
-        return modelInfo_List
+            commands.getstatusoutput('rm -rf ' + dirName)[0]
+            os.makedirs(dirName)
+            if os.path.exists(dirName):
+                return dirName
+            else:
+                return False
 
 if __name__ == '__main__':
-    for i in range(1,11):
+    tmmInfo_L = []
+    #try:
+    for i in range(1,2):
         tmm = FindToHomePage.TMMINDEX('http://mm.taobao.com/json/request_top_list.htm?type=0&page=' + str(i))
         tmmPage = tmm.getpage('utf-8')
-        tmmInfo_L = tmm.getMMInfo(tmmPage)
-        tmmInfo_L_Final = []
-        
-        for eachone in tmmInfo_L:
-            tmmInfo_L_Final.append({'userID':eachone[0].split('/')[3].split('.')[0], 'mmName':eachone[2], 'homeURL':eachone[0], 'mmInfo':eachone[1]})
-        for eachone in tmmInfo_L_Final:
-            print eachone['homeURL']        
+        tmmSoup = BeautifulSoup(tmmPage)
+        #find every mm's home page and infopage
+        for eachdiv in tmmSoup.body.children:
+            if eachdiv!=' ' and eachdiv!='\n' and eachdiv.name!='input':
+                tempList = []
+                for eacha in eachdiv.descendants:
+                    if eacha.name=='a':
+                        tempList.append(str(eacha))
+                tmmInfo_L.append(tmm.getMMInfo(tempList[0]+tempList[1])[0])
+        time.sleep(1)
+    for eachone in tmmInfo_L:
+        taonvlang = TAONVLANG(str(eachone['homeURL']))
+        pageHome = taonvlang.getpage('gb2312')
+        picURL_List = set(taonvlang.getPic_BS(pageHome))
 
-        for eachone in tmmInfo_L_Final:
+        result = taonvlang.mkDir('/home/zm/pythonProject/spider/taonvlang/pic/' + eachone['mmName'])
+        print result
+        if result:
+            fileNameNum = 1
+            print 'Name=' + eachone['mmName']
+            for eachone1 in picURL_List:
+                houzhui = eachone1.split('.')[-1]
+                taonvlang.saveImg(eachone1, result + '/' + str(fileNameNum) + '.' + houzhui)
+                fileNameNum = fileNameNum + 1
+                time.sleep(0.2)
+    #except Exception, e:
+        #print e
+        #print 'This is ERROR!'
+
             
-            taonvlang = TAONVLANG(str(eachone['homeURL']))
         
-            pageHome = taonvlang.getpage('gb2312')
-            picURL_List = set(taonvlang.getPic(pageHome))
-            result = taonvlang.mkDir('/home/zm/PycharmProjects/spider/' + eachone['mmName'])
-            if result:
-                fileNameNum = 1
-                print result
-                time.sleep(0.3)
-                for eachone1 in picURL_List:
-                    houzhui = eachone1.split('.')[-1]
-                    taonvlang.saveImg(eachone1, result + '/' + str(fileNameNum) + '.' + houzhui)
-                    fileNameNum = fileNameNum + 1
-
-                        
-
-                    
