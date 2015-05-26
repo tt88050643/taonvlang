@@ -6,8 +6,9 @@ import re, os, commands
 import simplejson as json
 import chardet
 import time
-import FindToHomePage, mycookie
+import mycookie
 from bs4 import BeautifulSoup
+from os.path import getsize
 class TAONVLANG:
 
     def __init__(self, baseurl):
@@ -28,13 +29,6 @@ class TAONVLANG:
                 print u'连接失败，错误原因' + e.reason
                 return None
 
-    def getPic(self, page):
-        pattern = re.compile('<img style.*?src="(.*?)"/>', re.S)
-        items = re.findall(pattern, page)
-        return items
-
-#<img height="559" src="http://img01.taobaocdn.com/imgextra/i1/10490029241756805/T1zm_SFhFXXXXXXXXX_!!631300490-0-tstar.jpg" style="margin: 10.0px;width: 630.0px;height: 559.0px;float: none;" width="630"/>
-
     def getPic_BS(self, page):
         picList_temp = []
         soup = BeautifulSoup(page) 
@@ -50,8 +44,6 @@ class TAONVLANG:
                 else:
                     pass
         return picList_temp
-        #for eachone in soup.find_all('img'):
-         #   print eachone
 
     def saveImg(self, imgURL, fileName):
         u = urllib.urlopen(imgURL)
@@ -73,45 +65,62 @@ class TAONVLANG:
             else:
                 return False
 
+    def getMMInfo(self, page):
+        tmmInfo_S = ''
+        tmmInfo_L = []
+        tmmSoup = BeautifulSoup(page)
+        #find every mm's home page and infopage
+        for eachone in tmmSoup.find_all('div', class_='list-item'):
+            tmmInfo_S = str(eachone.find_all('a')[0]) + ' ' + str(eachone.find_all('a')[1])
+            pattern = re.compile('<a class=.*?href="(.*?)".*?target.*?<a class="lady-name".*?href="(.*?)".*?target="_blank">(.*?)</a>', re.S)
+            items = re.findall(pattern, tmmInfo_S)
+            items = items[0]
+            tmmInfo_L.append({'userID':items[1].split('user_id=')[-1], 'mmName':items[2], 'homeURL':items[0], 'mmInfo':items[1]})    
+        #print len(tmmInfo_L)
+        return tmmInfo_L
+
+    def isImage(self, filename):
+        imageSize = os.path.getsize(filename)
+        if imageSize<1000:      # <1k bytes
+            return False
+        else:
+            return True
+
+    def rmImage(self, filename):
+        try:
+            os.remove(filename)
+            print 'remove ' + filename
+        except WindowsError:
+            pass
+
 if __name__ == '__main__':
     tmmInfo_L = []
     #try:
-    for i in range(7,20):
-        tmm = FindToHomePage.TMMINDEX('http://mm.taobao.com/json/request_top_list.htm?type=0&page=' + str(i))
+    for i in range(8,20):
+        tmm = TAONVLANG('http://mm.taobao.com/json/request_top_list.htm?type=0&page=' + str(i))
         tmmPage = tmm.getpage('utf-8')
         tmmInfo_L = tmm.getMMInfo(tmmPage)
-        """
-        tmmSoup = BeautifulSoup(tmmPage)
-        #find every mm's home page and infopage
+        
+        for eachone in tmmInfo_L:
+            taonvlang = TAONVLANG(str(eachone['homeURL']))
+            pageHome = taonvlang.getpage('gb2312')
+            picURL_List = set(taonvlang.getPic_BS(pageHome))
 
-        for eachdiv in tmmSoup.body.children:
-            if eachdiv!=' ' and eachdiv!='\n' and eachdiv.name!='input':
-                tempList = []
-                for eacha in eachdiv.descendants:
-                    if eacha.name=='a':
-                        tempList.append(str(eacha))
-                tmmInfo_L.append(tmm.getMMInfo(tempList[0]+tempList[1])[0])
-
-
-        time.sleep(1)
-    for eachone in tmmInfo_L:
-        taonvlang = TAONVLANG(str(eachone['homeURL']))
-        pageHome = taonvlang.getpage('gb2312')
-        picURL_List = set(taonvlang.getPic_BS(pageHome))
-
-        result = taonvlang.mkDir('/home/zm/pythonProject/spider/taonvlang/pic/' + eachone['mmName'])
-        print result
-        if result:
-            fileNameNum = 1
-            print 'Name=' + eachone['mmName']
-            for eachone1 in picURL_List:
-                houzhui = eachone1.split('.')[-1]
-                taonvlang.saveImg(eachone1, result + '/' + str(fileNameNum) + '.' + houzhui)
-                fileNameNum = fileNameNum + 1
-                time.sleep(0.2)
+            result = taonvlang.mkDir('/home/zm/pythonProject/spider/taonvlang/pic/' + eachone['mmName'])
+            print result
+            if result:
+                fileNameNum = 1
+                print 'Name=' + eachone['mmName']
+                for eachone1 in picURL_List:
+                    houzhui = eachone1.split('.')[-1]
+                    imageName = result + '/' + str(fileNameNum) + '.' + houzhui
+                    taonvlang.saveImg(eachone1, imageName)
+                    if taonvlang.isImage(imageName):
+                        fileNameNum = fileNameNum+1
+                    else:
+                        taonvlang.rmImage(imageName)
+                    time.sleep(0.2)
     #except Exception, e:
         #print e
         #print 'This is ERROR!'
-
-            
-        """
+    
