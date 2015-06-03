@@ -1,15 +1,13 @@
 #!/usr/bin/python
 #coding=utf-8
-import urllib2
-import urllib
-import re, os, commands
+import urllib2, urllib
+import re, os, commands, signal, chardet
 import simplejson as json
-import chardet
-import time
-import mycookie
+import time, mycookie
 from bs4 import BeautifulSoup
 from os.path import getsize
 from multiprocessing import Process, Queue
+
 class TAONVLANG:
 
     def __init__(self, baseurl):
@@ -53,15 +51,11 @@ class TAONVLANG:
             print e
 
     def saveImg(self, imgURL, fileName):
-        try:
-            u = urllib2.urlopen(imgURL)
-            data = u.read()
-            f = open(fileName, 'wb')
-            f.write(data)
-            f.close()     
-        except Exception, e:
-            print 'get page error'
-            pass
+        u = urllib2.urlopen(imgURL)
+        data = u.read()
+        f = open(fileName, 'wb')
+        f.write(data)
+        f.close()     
 
     def mkDir(self, dirName):
         isExists = os.path.exists(dirName)
@@ -110,21 +104,35 @@ class TAONVLANG:
 
 if __name__ == '__main__':
     tmmInfo_L = []
+    def noName():
+        for x in xrange(1, 1000):     #if there are 1000 no name mm
+            yield x
+
     #try:
-    def mmStart(pageNum, curmmNum):
+    def mmStart(pageNum, curmmNum=1):
+        curmmNum_now = curmmNum-1
+        noNameIter = noName()
+        #q.put(os.getpid())  #1st
         for i in range(pageNum, 999):
+            #q.put(i)    #2st
             tmm = TAONVLANG('http://mm.taobao.com/json/request_top_list.htm?type=0&page=' + str(i))
             tmmPage = tmm.getpage('utf-8')
             tmmInfo_L = tmm.getMMInfo(tmmPage)
             
             for eachone in tmmInfo_L[curmmNum-1:]:
+                curmmNum_now = curmmNum_now+1 if curmmNum_now!=10 else 1
+                #if curmmNum_now==11:
+                 #   curmmNum_now = 1
+                #q.put(curmmNum_now)   #3st
+                q.put({'tmmpid':os.getpid(), 'tmmPageNum':i, 'tmmCurmmNum':curmmNum_now})
+
                 taonvlang = TAONVLANG(str(eachone['homeURL']))
                 pageHome = taonvlang.getpage('gb2312')
                 
                 picURL_List = taonvlang.getPic_BS(pageHome)
                 try:
-                    result = taonvlang.mkDir('/home/zm/pythonProject/spider/taonvlang/pic/' + eachone['mmName'])
-                    print '\n' + str(len(picURL_List))
+                    result = taonvlang.mkDir('/home/zm/pythonProject/spider/taonvlang/pic/' + eachone['mmName']) if eachone['mmName']!='' else taonvlang.mkDir('/home/zm/pythonProject/spider/taonvlang/pic/' + 'NO NAME-' + str(noNameIter.next()))    
+                    print str(len(picURL_List))
                     print result
                     if result and len(picURL_List)>=1:
                         fileNameNum = 1
@@ -132,7 +140,11 @@ if __name__ == '__main__':
                         for eachone1 in picURL_List:
                             houzhui = eachone1.split('.')[-1]
                             imageName = result + '/' + str(fileNameNum) + '.' + houzhui
-                            taonvlang.saveImg(eachone1, imageName)
+                            try:
+                                taonvlang.saveImg(eachone1, imageName)
+                            except Exception, e:
+                                print 'get page error'
+                                continue
                             if taonvlang.isImage(imageName):
                                 fileNameNum = fileNameNum+1
                             else:
@@ -140,20 +152,38 @@ if __name__ == '__main__':
                             time.sleep(0.2)
                 except Exception, e:
                     print e
-    wdProc():
+                #q.put('status_OK!')    #4st
+            curmmNum = 1
+
+    def wdProc():
+
+        #tmmpid = q.get(timeout=10)
+        #pageNum_wd = q.get(timeout=10)
+        #curmmNum_wd = q.get(timeout=10)
+        #print 'before:   ' + str(curmmNum_wd)
+        while True:
+            try:
+                tmmMessage = q.get(timeout=120)
+                tmmpid = tmmMessage['tmmpid']
+                pageNum_wd = tmmMessage['tmmPageNum']
+                curmmNum_wd = tmmMessage['tmmCurmmNum']
+                print '---------------------------------------------------------------------------------------------------------------------------------------------\n'
+                print tmmMessage
+            except Exception, e:
+                print '\nno food! and restart the tmmTask!'
+                print pageNum_wd
+                print curmmNum_wd
+                os.kill(tmmpid, signal.SIGKILL)
+                if curmmNum_wd==10:
+                    pageNum_wd = pageNum_wd+1
+                    curmmNum_wd = 0
+                Process(target=mmStart,args=(pageNum_wd, curmmNum_wd+1)).start()
+                print 'after:   ' + str(curmmNum_wd)
 
     q = Queue()
-    watchDog = Process(target=wdProc, args=(q,))
-    watchDog.start()
-    wdProc()                      
-    pid = os.fork()
-    if pid==0:
-        mmStart(1, 3)
-    else:
-        wdProc()
-
-        #except Exception, e:
-            #print e
-            #print 'This is ERROR!'
+    watchDogProc = Process(target=wdProc,args=())
+    watchDogProc.start()
+    tmmProc = Process(target=mmStart,args=(100, 6))
+    tmmProc.start()
 
     
